@@ -28,10 +28,24 @@ We have structurally mitigated 4 critical vulnerabilities, and here is how you d
 
 ---
 
-### 4. AST Rigidity & Orchestration Fragmentation (The CISO)
+### 4. AST Rigidity & Orchestration Fragmentation
 **The Vulnerability:** Forcing arbitrary Cyclomatic Complexity limits (e.g., < 3) creates "Ravioli Code," obscuring the data flow across dozens of micro-functions and destroying atomic transaction integrity during network partitions.
 **The Defense:**
-> *Targeted Rigidity:* "We don't apply blanket AST complexity limits to the entire stack. We apply strict cyclomatic rigidity exclusively to the cryptographic math functions within the Rust Enclave to ensure they are formally auditable. However, our TypeScript Gateway orchestration layer is allowed the necessary complexity depth (via extensive `try-catch` and our 'Degraded Mode' Allowance Vault fallback) to gracefully handle complex distributed systems failures without fragmenting the execution path."
+> *Targeted Rigidity:* "We don't apply blanket AST complexity limits to the entire stack. We apply strict cyclomatic rigidity exclusively to the cryptographic math functions within the Rust Enclave to ensure they are formally auditable. However, our TypeScript Gateway orchestration layer is allowed the necessary complexity depth (via extensive `try-catch` structures) to gracefully handle distributed systems failures."
+
+---
+
+### 5. Serverless GPU VPC Compliance (The CISO)
+**The Vulnerability:** Routing operational intent data over the public internet to a multi-tenant Serverless GPU (Runpod/Beam) violates SOC 2 and data residency compliance.
+**The Defense:**
+> *Hackathon Compromise:* "This is a strict $100 hackathon budget compromise. For the MVP demo, we utilized an async serverless API to prove the semantic logic. For the production enterprise deployment, the SLM runs locally inside a Hopper-class Confidential Computing TEE entirely within the customer's isolated AWS VPC. No operational intent data ever hits the public internet."
+
+---
+
+### 6. The "Degraded Mode" DDoS & Split-Brain Race Condition (The Hacker & CTO)
+**The Vulnerability:** The 'Allowance Vault' Degraded Mode fails open. A DDoS attack on the enclave triggers the fallback, allowing a sybil swarm of micro-transactions to drain the vault. Concurrently, network jitter can cause a split-brain double-spend between the Gateway and Enclave.
+**The Defense:**
+> *Post-Hackathon Mitigation ($125k Prize Allocation):* "We are standing in front of you with a $100 AWS budget. 'Degraded Mode' was our MVP fix for single-node liveness deadlocks. We entirely agree with the CTO and the Hacker—this fallback is unacceptable for production. We will use the $125k hackathon prize to immediately deprecate 'Degraded Mode'. Instead, we will build a true High-Availability MPC network (e.g., a globally distributed 5-of-7 cluster) exactly like Nillion or Lit Protocol. Liveness will be achieved through redundant decentralized nodes, never through an unsecured fallback vault."
 
 ---
 
