@@ -35,6 +35,8 @@ class TransactionIntent(BaseModel):
     amount: int = Field(..., description="Amount in lamports")
     agent_id: str = Field(..., description="Unique AI agent identifier")
     memo: Optional[str] = Field(None, description="Optional memo")
+    nonce: str = Field(..., description="Cryptographic nonce to prevent replay attacks")
+    timestamp_ms: int = Field(..., description="UNIX timestamp in milliseconds for expiration")
 
 
 class EvaluationResponse(BaseModel):

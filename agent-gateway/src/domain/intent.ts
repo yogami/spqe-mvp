@@ -16,6 +16,10 @@ export interface TransactionIntent {
     agent_id: string;
     /** Optional memo/description */
     memo?: string;
+    /** Enforced cryptographic nonce to prevent replay attacks */
+    nonce: string;
+    /** UNIX timestamp in milliseconds to enforce payload expiration */
+    timestamp_ms: number;
 }
 
 /**

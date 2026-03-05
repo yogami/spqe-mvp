@@ -22,6 +22,10 @@ pub struct TransactionIntent {
     /// Optional memo/description of the intent
     #[serde(default)]
     pub memo: Option<String>,
+    /// Enforced cryptographic nonce to prevent replay attacks
+    pub nonce: String,
+    /// UNIX timestamp in milliseconds to enforce payload expiration
+    pub timestamp_ms: u64,
 }
 
 /// The semantic evaluation verdict from the SLM policy evaluator.

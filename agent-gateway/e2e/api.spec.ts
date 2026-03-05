@@ -55,7 +55,9 @@ test.describe('SPQE Agent Gateway - Production E2E Tests', () => {
                 target: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin',
                 amount: 1000000,
                 agent_id: 'e2e-test-agent',
-                memo: 'E2E Test Transfer'
+                memo: 'E2E Test Transfer',
+                nonce: "test-nonce-123",
+                timestamp_ms: Date.now()
             }
         });
 

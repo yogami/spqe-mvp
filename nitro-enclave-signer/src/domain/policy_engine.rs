@@ -30,9 +30,10 @@ impl Default for PolicyConfig {
 /// If this fails, the external SLM (AI) is completely ignored.
 pub struct PolicyEngine {
     config: PolicyConfig,
-    // In a real implementation this would use a bounded cache (moka/lru) 
-    // and tokio time methods, but for MVP we use a simple hash map.
+    // (agent_id -> Vec<timestamps>) for rate limiting
     rate_tracker: std::sync::Mutex<HashMap<String, Vec<u64>>>,
+    // Cache of seen nonces to prevent replay attacks
+    seen_nonces: std::sync::Mutex<HashMap<String, u64>>,
 }
 
 impl PolicyEngine {
@@ -40,6 +41,7 @@ impl PolicyEngine {
         Self {
             config: PolicyConfig::default(),
             rate_tracker: std::sync::Mutex::new(HashMap::new()),
+            seen_nonces: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -49,6 +51,32 @@ impl PolicyEngine {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        let now_ms = now * 1000;
+
+        // 0. Anti-Replay: Timestamp and Nonce validation
+        let max_age_ms = 60_000; // 60 seconds
+        if now_ms.saturating_sub(intent.timestamp_ms) > max_age_ms {
+            return Err(PolicyVerdict {
+                approved: false,
+                reasoning: format!("DENIED (Replay Protection): Timestamp {} is expired.", intent.timestamp_ms),
+                risk_score: 1.0,
+            });
+        }
+        
+        if let Ok(mut nonces) = self.seen_nonces.lock() {
+            // Cleanup old nonces
+            let window_start_ms = now_ms.saturating_sub(max_age_ms);
+            nonces.retain(|_, &mut ts| ts > window_start_ms);
+            
+            if nonces.contains_key(&intent.nonce) {
+                return Err(PolicyVerdict {
+                    approved: false,
+                    reasoning: format!("DENIED (Replay Protection): Nonce {} has already been used.", intent.nonce),
+                    risk_score: 1.0,
+                });
+            }
+            nonces.insert(intent.nonce.clone(), intent.timestamp_ms);
+        }
 
         // 1. Blacklisted Address Check
         if self.config.blacklisted_addresses.contains(&intent.target) {

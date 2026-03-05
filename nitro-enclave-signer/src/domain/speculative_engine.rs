@@ -11,6 +11,9 @@
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 use tokio::time::timeout;
 use tracing::{info, warn, instrument};
@@ -30,6 +33,7 @@ pub struct SpeculativeEngine {
     signer: Arc<dyn SignerPort>,
     local_policy: Arc<PolicyEngine>,
     evaluation_timeout: Duration,
+    semantic_cache: Arc<std::sync::Mutex<HashMap<String, PolicyVerdict>>>,
 }
 
 impl SpeculativeEngine {
@@ -44,6 +48,7 @@ impl SpeculativeEngine {
             signer,
             local_policy,
             evaluation_timeout,
+            semantic_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -75,7 +80,48 @@ impl SpeculativeEngine {
             });
         }
 
-        // === STAGE 2: FORK - INTERCEPT & PRE-COMPUTE ===
+        // STAGE 1.5: WARM-BOOT PATH (O(1) SEMANTIC CACHE)
+        // Hash the semantic fields (ignoring the unique nonce/timestamp)
+        let mut hasher = DefaultHasher::new();
+        intent.action.hash(&mut hasher);
+        intent.target.hash(&mut hasher);
+        intent.amount.hash(&mut hasher);
+        intent.agent_id.hash(&mut hasher);
+        let semantic_hash = hasher.finish().to_string();
+
+        let mut cached_verdict_opt = None;
+        if let Ok(cache) = self.semantic_cache.lock() {
+            if let Some(v) = cache.get(&semantic_hash) {
+                cached_verdict_opt = Some(v.clone());
+            }
+        }
+
+        if let Some(verdict) = cached_verdict_opt {
+            info!("Warm-Boot Path: Semantic Cache HIT. Bypassing SLM.");
+            // Generate the signature synchronously using the precompute -> finalize flow
+            let mut signature = None;
+            if verdict.approved {
+                match self.signer.precompute_nonces(&message).await {
+                    Ok(nonces) => {
+                        match self.signer.finalize_signature(&message, nonces).await {
+                            Ok(sig) => signature = Some(sig),
+                            Err(e) => warn!("Fast-path signing failed: {}", e),
+                        }
+                    }
+                    Err(e) => warn!("Fast-path nonce compute failed: {}", e),
+                }
+            }
+            let latency_ms = start.elapsed().as_millis() as u64;
+            return Ok(SignedResponse {
+                intent,
+                verdict,
+                signature,
+                latency_ms,
+            });
+        }
+
+        // === STAGE 2: COLD-BOOT PATH (FORK - INTERCEPT & PRE-COMPUTE) ===
+        info!("Cold-Boot Path: Semantic Cache MISS. Forking to SLM (Thread A) and PQ Signer (Thread B)");
         let evaluator = self.evaluator.clone();
         let signer = self.signer.clone();
         let eval_timeout = self.evaluation_timeout;
@@ -99,7 +145,13 @@ impl SpeculativeEngine {
 
         // Unwrap JoinHandle results
         let verdict = match eval_result {
-            Ok(Ok(Ok(verdict))) => verdict,
+            Ok(Ok(Ok(verdict))) => {
+                // Cache the successful SLM evaluation
+                if let Ok(mut cache) = self.semantic_cache.lock() {
+                    cache.insert(semantic_hash, verdict.clone());
+                }
+                verdict
+            },
             Ok(Ok(Err(e))) => {
                 // Evaluator returned an error — fail closed
                 warn!("Policy evaluator error: {}, defaulting to DENY", e);

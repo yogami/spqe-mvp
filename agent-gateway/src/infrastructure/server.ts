@@ -73,7 +73,7 @@ async function buildServer() {
                     "If approved, builds a Squads V4 multisig proposal and returns the PQ signature.",
                 body: {
                     type: "object",
-                    required: ["action", "target", "amount", "agent_id"],
+                    required: ["action", "target", "amount", "agent_id", "nonce", "timestamp_ms"],
                     properties: {
                         action: {
                             type: "string",
@@ -94,6 +94,14 @@ async function buildServer() {
                         memo: {
                             type: "string",
                             description: "Optional memo/description",
+                        },
+                        nonce: {
+                            type: "string",
+                            description: "Cryptographic nonce to prevent replay attacks",
+                        },
+                        timestamp_ms: {
+                            type: "number",
+                            description: "UNIX timestamp in milliseconds for expiration",
                         },
                     },
                 },
