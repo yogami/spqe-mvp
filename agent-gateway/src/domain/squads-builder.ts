@@ -17,8 +17,7 @@ import * as multisig from "@sqds/multisig";
 
 import type { MultisigConfig, TransactionIntent } from "./intent.js";
 
-const { Multisig, Proposal } = multisig;
-
+const { Multisig, Proposal } = multisig.accounts;
 /**
  * Squads V4 multisig builder for the SPQE 2-of-3 co-signing protocol.
  *
@@ -230,7 +229,8 @@ export class SquadsBuilder {
     ): Promise<string> {
         const multisigPda = new PublicKey(this.config.multisigAddress);
 
-        const executeIx = multisig.instructions.vaultTransactionExecute({
+        const executeData = await multisig.instructions.vaultTransactionExecute({
+            connection: this.connection,
             multisigPda,
             transactionIndex,
             member: executor.publicKey,
@@ -240,7 +240,7 @@ export class SquadsBuilder {
         const message = new TransactionMessage({
             payerKey: executor.publicKey,
             recentBlockhash: latestBlockhash.blockhash,
-            instructions: [executeIx],
+            instructions: [executeData.instruction],
         }).compileToV0Message();
 
         const tx = new VersionedTransaction(message);
@@ -266,6 +266,6 @@ export class SquadsBuilder {
             this.connection,
             multisigPda
         );
-        return multisigAccount.transactionIndex;
+        return BigInt(multisigAccount.transactionIndex.toString());
     }
 }
