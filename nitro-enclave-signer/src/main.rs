@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use tracing_subscriber::EnvFilter;
 
+use crate::domain::policy_engine::PolicyEngine;
 use crate::domain::pq_signer::{PQSigner, AsyncPQSigner};
 use crate::domain::speculative_engine::SpeculativeEngine;
 use crate::infrastructure::slm_client::SLMClient;
@@ -54,19 +55,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Wire dependencies
-    let signer_port: Arc<dyn ports::SignerPort> = Arc::new(AsyncPQSigner::new(pq_signer));
-    let evaluator_port: Arc<dyn ports::PolicyEvaluatorPort> = Arc::new(SLMClient::new(
-        slm_url.clone(),
+    // 2. Initialize Infrastructure & Ports
+    let slm_client = Arc::new(SLMClient::new(slm_url.clone(), Duration::from_millis(eval_timeout_ms)));
+    let signer = Arc::new(AsyncPQSigner::new(pq_signer));
+    let local_policy = Arc::new(PolicyEngine::new());
+
+    // 3. Setup Application Use Case
+    let use_case = Arc::new(SignIntentUseCase::new(
+        slm_client,
+        signer,
+        local_policy,
         Duration::from_millis(eval_timeout_ms),
     ));
-
-    let engine = Arc::new(SpeculativeEngine::new(
-        evaluator_port,
-        signer_port,
-        Duration::from_millis(eval_timeout_ms),
-    ));
-
-    let use_case = Arc::new(SignIntentUseCase::new(engine));
 
     tracing::info!(
         slm_url = %slm_url,

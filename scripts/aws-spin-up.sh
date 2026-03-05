@@ -4,10 +4,10 @@
 # =============================================================================
 # Creates the AWS infrastructure for the SPQE hackathon:
 # 1. c7g.large (ARM/Graviton) — Nitro Enclave for the cryptographic signer
-# 2. g5.xlarge (A10G GPU) — Policy evaluator with SLM
+# (The SLM now runs on Serverless GPU to prevent exorbitant Hackathon EC2 costs)
 #
-# Budget: c7g.large @ $0.0725/hr + g5.xlarge @ $1.006/hr
-# 72hr worst case: $5.22 + $72.43 = $77.65 (under $100)
+# Budget: c7g.large @ $0.0725/hr
+# 72hr worst case: $5.22 (well under the $100 budget limit)
 #
 # Usage: ./scripts/aws-spin-up.sh [region]
 # =============================================================================
@@ -22,7 +22,6 @@ SECURITY_GROUP_NAME="spqe-hackathon-sg"
 # AMI IDs (Amazon Linux 2023 — update as needed)
 # These are for us-east-1. Change for other regions.
 AL2023_ARM_AMI="ami-0c101f26f147fa7fd"  # Amazon Linux 2023 ARM
-AL2023_X86_AMI="ami-0c101f26f147fa7fd"  # Amazon Linux 2023 x86 (for GPU)
 
 echo "============================================"
 echo "  SPQE AWS Infrastructure Spin-Up"
@@ -40,7 +39,7 @@ VPC_ID=$(aws ec2 describe-vpcs --region "$REGION" \
 
 SG_ID=$(aws ec2 create-security-group --region "$REGION" \
     --group-name "$SECURITY_GROUP_NAME" \
-    --description "SPQE Hackathon - Enclave and GPU instances" \
+    --description "SPQE Hackathon - Enclave instances" \
     --vpc-id "$VPC_ID" \
     --query "GroupId" --output text 2>/dev/null || \
     aws ec2 describe-security-groups --region "$REGION" \
@@ -92,49 +91,16 @@ USERDATA
 
 echo "   Instance ID: ${ENCLAVE_INSTANCE_ID}"
 
-# --- Step 3: Launch GPU Instance (g5.xlarge) ---
-echo ""
-echo "🧠 Launching GPU instance (g5.xlarge)..."
-echo "   Cost: \$1.006/hr (~\$20/20hr budget)"
-
-GPU_INSTANCE_ID=$(aws ec2 run-instances --region "$REGION" \
-    --instance-type g5.xlarge \
-    --image-id "$AL2023_X86_AMI" \
-    --security-group-ids "$SG_ID" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=${TAG_KEY},Value=${TAG_VALUE}},{Key=Name,Value=spqe-policy-evaluator}]" \
-    --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=50,VolumeType=gp3}" \
-    --user-data "$(cat <<'USERDATA'
-#!/bin/bash
-yum update -y
-yum install -y docker git
-systemctl enable --now docker
-usermod -aG docker ec2-user
-# Install NVIDIA Container Toolkit
-curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
-    tee /etc/yum.repos.d/nvidia-container-toolkit.repo
-yum install -y nvidia-container-toolkit
-nvidia-ctk runtime configure --runtime=docker
-systemctl restart docker
-USERDATA
-)" \
-    --query "Instances[0].InstanceId" --output text)
-
-echo "   Instance ID: ${GPU_INSTANCE_ID}"
-
-# --- Step 4: Wait for instances to be running ---
+# --- Step 3: Wait for instances to be running ---
 echo ""
 echo "⏳ Waiting for instances to reach 'running' state..."
 
 aws ec2 wait instance-running --region "$REGION" \
-    --instance-ids "$ENCLAVE_INSTANCE_ID" "$GPU_INSTANCE_ID"
+    --instance-ids "$ENCLAVE_INSTANCE_ID"
 
 # Get public IPs
 ENCLAVE_IP=$(aws ec2 describe-instances --region "$REGION" \
     --instance-ids "$ENCLAVE_INSTANCE_ID" \
-    --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-
-GPU_IP=$(aws ec2 describe-instances --region "$REGION" \
-    --instance-ids "$GPU_INSTANCE_ID" \
     --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 
 # --- Output ---
@@ -148,29 +114,19 @@ echo "    Instance ID: ${ENCLAVE_INSTANCE_ID}"
 echo "    Public IP:   ${ENCLAVE_IP}"
 echo "    SSH:         ssh ec2-user@${ENCLAVE_IP}"
 echo ""
-echo "  Policy Evaluator (g5.xlarge GPU):"
-echo "    Instance ID: ${GPU_INSTANCE_ID}"
-echo "    Public IP:   ${GPU_IP}"
-echo "    SSH:         ssh ec2-user@${GPU_IP}"
-echo ""
 echo "  ⚠️  Budget Alert:"
 echo "    c7g.large: \$0.0725/hr"
-echo "    g5.xlarge: \$1.006/hr"
-echo "    Combined:  \$1.079/hr"
 echo "    Run aws-spin-down.sh when not actively developing!"
 echo ""
 echo "  📝 Next Steps:"
 echo "    1. SSH into enclave instance and run: scripts/build-enclave.sh"
-echo "    2. SSH into GPU instance and run: scripts/deploy-gpu.sh"
-echo "    3. Update ENCLAVE_URL in Railway with: http://${ENCLAVE_IP}:5000"
+echo "    2. Update ENCLAVE_URL in Railway with: http://${ENCLAVE_IP}:5000"
 echo "============================================"
 
 # Save IPs to a config file for other scripts
 cat > "${BASH_SOURCE[0]%/*}/.aws-instances.env" <<EOF
 ENCLAVE_INSTANCE_ID=${ENCLAVE_INSTANCE_ID}
-GPU_INSTANCE_ID=${GPU_INSTANCE_ID}
 ENCLAVE_IP=${ENCLAVE_IP}
-GPU_IP=${GPU_IP}
 REGION=${REGION}
 SG_ID=${SG_ID}
 EOF

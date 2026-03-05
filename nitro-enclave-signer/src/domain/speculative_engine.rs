@@ -20,6 +20,7 @@ use crate::domain::{
     SpeculativeNonces,
 };
 use crate::ports::{PolicyEvaluatorPort, SignerPort};
+use crate::domain::policy_engine::PolicyEngine;
 
 /// The speculative parallelization engine.
 /// Forks execution into policy evaluation (I/O) and nonce pre-computation (compute),
@@ -27,6 +28,7 @@ use crate::ports::{PolicyEvaluatorPort, SignerPort};
 pub struct SpeculativeEngine {
     evaluator: Arc<dyn PolicyEvaluatorPort>,
     signer: Arc<dyn SignerPort>,
+    local_policy: Arc<PolicyEngine>,
     evaluation_timeout: Duration,
 }
 
@@ -34,11 +36,13 @@ impl SpeculativeEngine {
     pub fn new(
         evaluator: Arc<dyn PolicyEvaluatorPort>,
         signer: Arc<dyn SignerPort>,
+        local_policy: Arc<PolicyEngine>,
         evaluation_timeout: Duration,
     ) -> Self {
         Self {
             evaluator,
             signer,
+            local_policy,
             evaluation_timeout,
         }
     }
@@ -57,7 +61,21 @@ impl SpeculativeEngine {
         let message = serde_json::to_vec(&intent)
             .map_err(|e| EnclaveError::Serialization(e.to_string()))?;
 
-        // === FORK: Launch both threads concurrently ===
+        // === STAGE 1: LOCAL TEE POLICY ENFORCEMENT ===
+        // Extremely fast, deterministic checks running inside the Nitro Enclave.
+        // If this fails, the request is hard-blocked inside the TEE boundary.
+        if let Err(denial_verdict) = self.local_policy.evaluate(&intent) {
+            info!("Local TEE policy engine denied intent: {}", denial_verdict.reasoning);
+            let latency_ms = start.elapsed().as_millis() as u64;
+            return Ok(SignedResponse {
+                intent,
+                verdict: denial_verdict,
+                signature: None,
+                latency_ms,
+            });
+        }
+
+        // === STAGE 2: FORK - INTERCEPT & PRE-COMPUTE ===
         let evaluator = self.evaluator.clone();
         let signer = self.signer.clone();
         let eval_timeout = self.evaluation_timeout;

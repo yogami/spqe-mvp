@@ -4,18 +4,28 @@
 // PQ signer, and SLM client into a single entry point.
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use crate::domain::speculative_engine::SpeculativeEngine;
-use crate::domain::{TransactionIntent, SignedResponse, EnclaveError};
+use crate::domain::{
+    policy_engine::PolicyEngine, speculative_engine::SpeculativeEngine, EnclaveError, SignedResponse, TransactionIntent,
+};
+use crate::ports::{PolicyEvaluatorPort, SignerPort};
 
 /// Use case: Validate and sign a transaction intent using speculative parallelization.
 pub struct SignIntentUseCase {
-    engine: Arc<SpeculativeEngine>,
+    engine: SpeculativeEngine,
 }
 
 impl SignIntentUseCase {
-    pub fn new(engine: Arc<SpeculativeEngine>) -> Self {
-        Self { engine }
+    pub fn new(
+        evaluator: Arc<dyn PolicyEvaluatorPort>,
+        signer: Arc<dyn SignerPort>,
+        local_policy: Arc<PolicyEngine>,
+        evaluation_timeout: Duration,
+    ) -> Self {
+        Self {
+            engine: SpeculativeEngine::new(evaluator, signer, local_policy, evaluation_timeout),
+        }
     }
 
     /// Execute the sign intent flow:
@@ -26,3 +36,4 @@ impl SignIntentUseCase {
         self.engine.execute(intent).await
     }
 }
+```

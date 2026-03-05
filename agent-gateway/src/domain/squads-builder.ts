@@ -109,14 +109,15 @@ export class SquadsBuilder {
     async buildProposal(
         intent: TransactionIntent,
         proposer: Keypair,
-        transactionIndex: bigint
+        transactionIndex: bigint,
+        vaultIndex: number = 0
     ): Promise<{ proposalPda: PublicKey; signatures: string[] }> {
         const multisigPda = new PublicKey(this.config.multisigAddress);
 
-        // Get the vault PDA (index 0 = default vault)
+        // Get the vault PDA
         const [vaultPda] = multisig.getVaultPda({
             multisigPda,
-            index: 0,
+            index: vaultIndex,
         });
 
         // Build the inner instruction (the actual transfer)
@@ -131,7 +132,7 @@ export class SquadsBuilder {
             multisigPda,
             transactionIndex,
             creator: proposer.publicKey,
-            vaultIndex: 0,
+            vaultIndex,
             ephemeralSigners: 0,
             transactionMessage: new TransactionMessage({
                 payerKey: vaultPda,

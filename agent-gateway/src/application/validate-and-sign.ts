@@ -45,23 +45,32 @@ export class ValidateAndSignUseCase {
         const start = performance.now();
 
         // Step 1: Route to enclave for speculative evaluation + PQ signing
-        let enclaveResponse: EnclaveSignResponse;
+        let enclaveResponse: EnclaveSignResponse | null = null;
+        let degradedMode = false;
         try {
             enclaveResponse = await this.enclaveClient.sign(intent);
         } catch (error) {
-            // Fail-closed: if enclave is unreachable, deny
-            return {
-                approved: false,
-                pq_signature: null,
-                proposal_index: null,
-                transaction_signature: null,
-                reasoning: `Enclave unreachable (fail-closed): ${error instanceof Error ? error.message : String(error)}`,
-                latency_ms: Math.round(performance.now() - start),
-            };
+            // DEGRADED MODE (Allowance Vault Fallback)
+            console.warn(`[Liveness Deadlock Fix] Enclave unreachable: ${error}. Evaluating degraded mode...`);
+            // Only allow micro-transactions (< 0.1 SOL) to route through the Allowance Vault
+            if (intent.amount <= 100_000_000 && this.squadsBuilder && this.agentKeypair) {
+                console.log("[Liveness Deadlock Fix] Intent qualifies for Allowance Vault. Defeating deadlock.");
+                degradedMode = true;
+            } else {
+                return {
+                    approved: false,
+                    pq_signature: null,
+                    proposal_index: null,
+                    transaction_signature: null,
+                    reasoning: `Enclave unreachable and intent exceeds allowance (fail-closed): ${error instanceof Error ? error.message : String(error)}`,
+                    latency_ms: Math.round(performance.now() - start),
+                };
+            }
         }
 
         // Step 2: If denied, return early
-        if (!enclaveResponse.verdict.approved || !enclaveResponse.signature) {
+        // Step 2: If denied by enclave, return early
+        if (!degradedMode && enclaveResponse && (!enclaveResponse.verdict.approved || !enclaveResponse.signature)) {
             return {
                 approved: false,
                 pq_signature: enclaveResponse.signature,
@@ -72,49 +81,44 @@ export class ValidateAndSignUseCase {
             };
         }
 
-        // Step 3: If approved and Squads is configured, build the multisig transaction
+        // Step 3: If approved (or in Degraded Mode) and Squads is configured, build the multisig transaction
         let proposalIndex: number | null = null;
         let transactionSignature: string | null = null;
 
-        if (this.squadsBuilder && this.enclaveKeypair && this.agentKeypair) {
+        if (this.squadsBuilder && this.agentKeypair) {
             try {
                 // Get next transaction index
                 const currentIndex = await this.squadsBuilder.getTransactionIndex();
                 const nextIndex = currentIndex + 1n;
 
-                // Agent proposes and self-approves (1st approval)
-                await this.squadsBuilder.buildProposal(
-                    intent,
-                    this.agentKeypair,
-                    nextIndex
-                );
+                if (degradedMode) {
+                    // DEGRADED MODE: Use vaultIndex 1 (Allowance Vault)
+                    // We only propose and self-approve. Human must co-sign if threshold is 2, 
+                    // or it executes immediately if threshold is 1 for the allowance vault.
+                    await this.squadsBuilder.buildProposal(intent, this.agentKeypair, nextIndex, 1);
 
-                // Enclave approves (2nd approval — reaches threshold)
-                await this.squadsBuilder.approveAsEnclave(
-                    this.enclaveKeypair,
-                    nextIndex
-                );
+                    transactionSignature = await this.squadsBuilder.executeTransaction(this.agentKeypair, nextIndex);
+                    proposalIndex = Number(nextIndex);
+                } else if (this.enclaveKeypair) {
+                    // STANDARD ENCLAVE MODE: Use vaultIndex 0 (Main Treasury)
+                    await this.squadsBuilder.buildProposal(intent, this.agentKeypair, nextIndex, 0);
 
-                // Execute the transaction
-                transactionSignature = await this.squadsBuilder.executeTransaction(
-                    this.agentKeypair,
-                    nextIndex
-                );
+                    await this.squadsBuilder.approveAsEnclave(this.enclaveKeypair, nextIndex);
 
-                proposalIndex = Number(nextIndex);
+                    transactionSignature = await this.squadsBuilder.executeTransaction(this.agentKeypair, nextIndex);
+                    proposalIndex = Number(nextIndex);
+                }
             } catch (error) {
                 console.error("Squads V4 transaction failed:", error);
-                // Intent was approved by enclave, but Solana tx failed
-                // Still return the PQ signature — the agent can retry the Squads part
             }
         }
 
         return {
             approved: true,
-            pq_signature: enclaveResponse.signature,
+            pq_signature: enclaveResponse?.signature ?? null,
             proposal_index: proposalIndex,
             transaction_signature: transactionSignature,
-            reasoning: enclaveResponse.verdict.reasoning,
+            reasoning: degradedMode ? "Approved via Degraded Mode (Allowance Vault)" : (enclaveResponse?.verdict.reasoning ?? "Approved"),
             latency_ms: Math.round(performance.now() - start),
         };
     }

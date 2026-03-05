@@ -62,19 +62,10 @@ slm_evaluator = SLMEvaluator(
     model_name=os.getenv("MODEL_NAME", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
 )
 
-# Lazy-load the SLM model on first request
-_slm_loaded = False
-
-
+# Serverless evaluator requires no local loading phase
 @app.on_event("startup")
 async def startup_event():
-    """Load the SLM model at startup if GPU is available."""
-    global _slm_loaded
-    if os.getenv("PRELOAD_MODEL", "false").lower() == "true":
-        logger.info("Pre-loading SLM model...")
-        slm_evaluator.load()
-        _slm_loaded = True
-        logger.info("SLM model pre-loaded successfully")
+    logger.info("Starting SPQE Policy Evaluator with Serverless vLLM")
 
 
 @app.post("/evaluate", response_model=EvaluationResponse)
@@ -86,7 +77,6 @@ async def evaluate_intent(intent: TransactionIntent):
     1. Rule-based policy engine (fast, deterministic)
     2. SLM semantic evaluation (deep, nuanced) — only if rules pass
     """
-    global _slm_loaded
     start = time.time()
 
     # Stage 1: Rule-based evaluation (always runs)
@@ -108,12 +98,8 @@ async def evaluate_intent(intent: TransactionIntent):
             evaluator="rule_engine",
         )
 
-    # Stage 2: SLM semantic evaluation
-    if not _slm_loaded:
-        slm_evaluator.load()
-        _slm_loaded = True
-
-    slm_verdict = slm_evaluator.evaluate(
+    # Stage 2: SLM semantic evaluation (Serverless async call)
+    slm_verdict = await slm_evaluator.evaluate(
         action=intent.action,
         target=intent.target,
         amount=intent.amount,
@@ -143,7 +129,6 @@ async def health():
         "service": "spqe-policy-evaluator",
         "version": "0.1.0",
         "model": slm_evaluator.model_name,
-        "model_loaded": _slm_loaded,
     }
 
 

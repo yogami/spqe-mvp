@@ -3,6 +3,7 @@
 
 pub mod speculative_engine;
 pub mod pq_signer;
+pub mod policy_engine;
 
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
@@ -99,6 +100,9 @@ pub struct SignedResponse {
 pub enum EnclaveError {
     #[error("Policy evaluation denied the intent: {0}")]
     PolicyDenied(String),
+
+    #[error("Local enclave policy evaluation denied the intent: {0}")]
+    LocalPolicyDenied(String),
 
     #[error("Policy evaluator timeout after {0}ms")]
     EvaluatorTimeout(u64),
