@@ -1,0 +1,28 @@
+{
+    "name": "spqe-agent-gateway",
+    "version": "0.1.0",
+    "description": "SPQE Agent Gateway — API routing plane for Solana AI agent co-signing via Squads V4",
+    "main": "dist/infrastructure/server.js",
+    "scripts": {
+        "dev": "tsx watch src/infrastructure/server.ts",
+        "build": "tsc",
+        "start": "node dist/infrastructure/server.js",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "fastify": "^5.2.0",
+        "@fastify/swagger": "^9.4.0",
+        "@fastify/swagger-ui": "^5.2.0",
+        "@sqds/multisig": "^2.1.3",
+        "@solana/web3.js": "^1.98.0",
+        "bs58": "^6.0.0",
+        "dotenv": "^16.4.7"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0",
+        "tsx": "^4.19.0",
+        "vitest": "^3.0.0",
+        "@types/node": "^22.0.0"
+    }
+}

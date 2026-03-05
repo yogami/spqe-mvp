@@ -1,0 +1,84 @@
+# SPQE MVP — Local Development Stack
+#
+# Runs all three components locally using Docker.
+# vsock is simulated via TCP for local development.
+#
+# Usage:
+#   docker compose up --build
+#   curl -X POST http://localhost:3000/api/validate \
+#     -H "Content-Type: application/json" \
+#     -d '{"action":"transfer","target":"9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin","amount":1000000,"agent_id":"agent-alpha-1"}'
+
+services:
+  # The Nitro Enclave Signer (Rust)
+  # In production, this runs inside an AWS Nitro Enclave on c7g.large.
+  # Locally, it runs as a regular TCP HTTP server.
+  enclave-signer:
+    build:
+      context: ./nitro-enclave-signer
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - SLM_URL=http://policy-evaluator:8080
+      - EVAL_TIMEOUT_MS=5000
+      - RUST_LOG=info
+    depends_on:
+      - policy-evaluator
+    networks:
+      - spqe-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # The Agent Gateway (TypeScript/Fastify)
+  # In production, this is deployed on Railway.app.
+  agent-gateway:
+    build:
+      context: ./agent-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ENCLAVE_URL=http://enclave-signer:5000
+      - ENCLAVE_TIMEOUT_MS=25000
+      - NODE_ENV=development
+      - LOG_LEVEL=info
+    depends_on:
+      - enclave-signer
+    networks:
+      - spqe-net
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3000/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # The Policy Evaluator (Python/FastAPI)
+  # In production, this runs on an AWS g5.xlarge with A10G GPU.
+  # Locally, it uses TinyLlama on CPU (or rule-based fallback).
+  policy-evaluator:
+    build:
+      context: ./policy-evaluator
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MODEL_NAME=TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      - PRELOAD_MODEL=false
+    networks:
+      - spqe-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  spqe-net:
+    driver: bridge
