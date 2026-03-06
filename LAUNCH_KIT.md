@@ -67,6 +67,39 @@ If you want to generate inbound momentum on LinkedIn *without* giving away the p
 > 
 > If you are building AI agents on Solana and need production-grade execution guardrails, my DMs are open. Let's talk integration.
 > 
+> ```mermaid
+> graph TD
+>     %% Styling
+>     classDef agent fill:#f9f9f9,stroke:#333,stroke-width:2px;
+>     classDef gateway fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+>     classDef firewall fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#c62828;
+>     classDef onchain fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+> 
+>     A["🤖 Autonomous AI Agent\n(Eliza, LangChain, etc.)"]:::agent
+>     B["⚡ SPQE Gateway\n(Intent Parser)"]:::gateway
+>     
+>     %% The Sandbox
+>     subgraph "Zero-Trust Execution Sandbox"
+>         C{"Deterministic\nHardware Rules\n(Max Wallet Limits)"}:::firewall
+>         D{"Semantic Firewall\n(Prompt Injection Check)"}:::firewall
+>         E["🔐 SPQE Cryptographic\nCo-Signer"]:::firewall
+>         
+>         C -->|Pass| D
+>         C -->|Fail| F["🛑 Hard Blocked"]:::firewall
+>         D -->|Pass| E
+>         D -->|Fail| F
+>     end
+> 
+>     G["⛓️ Squads V4 Multisig\n(Solana Blockchain)"]:::onchain
+>     H["💸 Transaction Executed"]:::onchain
+> 
+>     A -->|"Proposes Action"| B
+>     B -->|"Evaluates Intent"| C
+>     E -->|"Issues Co-Signature\n(Sub-25ms)"| G
+>     A -->|"Issues Primary Signature"| G
+>     G -->|"Executes if 2-of-3 Met"| H
+> ```
+> 
 > #Solana #AI #Cybersecurity #DeFi #Venturethon
 
 ## 2. Phase 1: The "@spqe/agent-firewall" SDK
