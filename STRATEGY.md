@@ -46,9 +46,14 @@ If we don't move fast, well-funded infrastructure teams (like Squads or Firebloc
 *   **Action:** Pitch SPQE to Squads directly not as a competitor, but as a "Pro Tier Integration." Allow Squads users to add an "SPQE AI Guardian" to their multisig directly from the Squads UI.
 *   **Pitch:** Share revenue with Squads. We become the default execution environment for their institutional clients experimenting with DeFi automation.
 
-**Phase 3: Cross-Chain Expansion (Months 5-8)**
-*   **Target:** EVM Ecosystem (Safe Global multisigs).
-*   **Action:** The Rust Nitro Enclave architecture is blockchain agnostic. Once we dominate Solana AI agents, we write an Ethers.js gateway adapter and instantly support every Ethereum, Base, and Arbitrum AI agent.
+**Phase 3: Cross-Chain Expansion (EVM, Algorand, Sui)**
+*   **Target:** Safe Global (EVM) and Algorand Standard Assets (ASA).
+*   **The Agnostic Architecture advantage:** The core deep-tech moat of SPQE (The Rust AWS Nitro Enclave, ML-DSA PoQ cryptography, and `tokio` speculative engine) is **mathematically agnostic to the underlying L1 blockchain**. The Enclave simply ingests a JSON intent, evaluates it semantically, and spits out a cryptographic signature shard. It does not know or care if that signature is destined for a Solana Squads Protocol or an Ethereum Safe multisig.
+*   **Execution:** To deploy SPQE at an ETHDenver or Algorand hackathon, you do zero Rust engineering. You simply write a new TypeScript Adapter in the `agent-gateway`:
+    *   *Solana:* `agent-gateway/src/adapters/squads-v4.ts`
+    *   *Ethereum:* `agent-gateway/src/adapters/safe-global-evm.ts`
+    *   *Algorand:* `agent-gateway/src/adapters/algorand-multisig.ts`
+*   **The Pitch:** "We built the hardware firewall once. By writing a 50-line TypeScript adapter, we instantly brought institutional, post-quantum AI security to the [Insert Hackathon Chain] ecosystem."
 
 ---
 
