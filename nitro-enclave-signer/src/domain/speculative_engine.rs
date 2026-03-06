@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use rand::Rng;
 
 use tokio::time::timeout;
 use tracing::{info, warn, instrument};
@@ -106,6 +107,7 @@ impl SpeculativeEngine {
 
         if let Some(verdict) = cached_verdict_opt {
             info!("Warm-Boot Path: Semantic Cache HIT. Bypassing SLM.");
+            
             // Generate the signature synchronously using the precompute -> finalize flow
             let mut signature = None;
             if verdict.approved {
@@ -119,6 +121,34 @@ impl SpeculativeEngine {
                     Err(e) => warn!("Fast-path nonce compute failed: {}", e),
                 }
             }
+            
+            // TOCTOU mitigation: Evaluate local rules ONE MORE TIME on the cached intent
+            // just in case global limits or bounds changed in the last 5 seconds.
+            if let Err(denial_verdict) = self.local_policy.evaluate(&intent) {
+                 info!("Local TEE policy engine intercepted cached intent: {}", denial_verdict.reasoning);
+                 return Ok(SignedResponse {
+                     intent,
+                     verdict: denial_verdict,
+                     signature: None,
+                     latency_ms: start.elapsed().as_millis() as u64,
+                 });
+            }
+
+            // --- CRYPTOGRAPHIC TIMING SIDE-CHANNEL MITIGATION ---
+            // If we return the cached response in 2ms, we create a Timing Oracle.
+            // Attackers can ping the network to guess what intents are cached.
+            // We must inject synthetic Jitter to pad the latency out to match
+            // the average Cold-Boot network response (e.g. 200ms - 350ms).
+            let current_latency = start.elapsed();
+            let mut rng = rand::thread_rng();
+            let target_latency_ms: u64 = rng.gen_range(200..350);
+            let target_duration = Duration::from_millis(target_latency_ms);
+            
+            if current_latency < target_duration {
+                let padding = target_duration - current_latency;
+                tokio::time::sleep(padding).await;
+            }
+            
             let latency_ms = start.elapsed().as_millis() as u64;
             return Ok(SignedResponse {
                 intent,

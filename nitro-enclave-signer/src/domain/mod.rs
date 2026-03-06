@@ -81,8 +81,22 @@ impl SpeculativeNonces {
 
     /// Securely discard the nonces without consuming them.
     pub fn discard(&mut self) {
-        self.consumed = true;
-        // Zeroize will handle the actual zeroing on drop
+        if !self.consumed {
+            self.nonce_data.zeroize();
+            self.consumed = true;
+        }
+    }
+}
+
+// DeepSeek R1 Mitigation: Enforce strict memory zeroization on Drop
+// If a tokio thread panics or the enclave crashes before discard/consume is called,
+// this ensures the ML-DSA lattice nonces are mathematically scrubbed from memory
+// to prevent Cold-Boot or hypervisor memory-scrape attacks.
+impl Drop for SpeculativeNonces {
+    fn drop(&mut self) {
+        if !self.consumed {
+            self.nonce_data.zeroize();
+        }
     }
 }
 
