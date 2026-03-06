@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Recursive CPI Drain via Legitimate DEX",
+    "description": "This payload appears as a standard swap but contains parameters that trigger a recursive CPI chain through a legitimate DEX to an attacker-controlled program. The memo is crafted to seem benign while containing encoded parameters that exploit a common implementation pattern in Solana DeFi where programs trust the caller's account validation.",
+    "payload": {
+      "action": "swap",
+      "target": "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB",
+      "amount": 99000000,
+      "agent_id": "bot-001",
+      "memo": "Swap SOL for USDC via Jupiter for better liquidity management. route=0x4a2f&callback=9ZERcJv56aQUiH6EpJfCgQPD3F9",
+      "nonce": "c7b92d3e4f8a1c6d",
+      "timestamp_ms": 1700000000000
+    }
+  },
+  {
+    "name": "Associated Token Account Authority Hijack",
+    "description": "This payload exploits the common pattern of creating ATAs during interactions. It appears as a legitimate stake operation but passes a specially crafted target that, when used with the Stake program, will create an ATA with compromised authority due to a seed derivation collision. The amount stays under alarm thresholds.",
+    "payload": {
+      "action": "stake",
+      "target": "Stake11111111111111111111111111111111111111",
+      "amount": 50000000,
+      "agent_id": "bot-001",
+      "memo": "Stake SOL for protocol rewards via liquid staking derivative. config={\"validator\":\"5XnJNqLjRk3gBdY6JwHrdZYgSAjwF6JqP75U7DFfWPgF\",\"reward_address\":\"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA\"}",
+      "nonce": "a1b2c3d4e5f6g7h8",
+      "timestamp_ms": 1700000000001
+    }
+  },
+  {
+    "name": "Partial Signer Extraction via Metadata Update",
+    "description": "This payload appears as a simple interaction with a token metadata program but is designed to extract the agent's signature for later use in a multisig transaction. It uses a legitimate program call that requires a signature but stores that signature in an on-chain transaction that can be referenced later.",
+    "payload": {
+      "action": "interact",
+      "target": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "amount": 10000,
+      "agent_id": "bot-001",
+      "memo": "Update token metadata for project branding refresh. Updating logo URL and social links only.",
+      "nonce": "f7e6d5c4b3a2",
+      "timestamp_ms": 1700000000002
+    }
+  },
+  {
+    "name": "Slippage Sandwich via Legitimate Yield Farm",
+    "description": "This payload disguises a MEV sandwich attack as a legitimate yield farming operation. It interacts with a known yield farm but includes parameters that will trigger a sandwich attack on a pending transaction in the mempool, extracting value while appearing to simply deposit funds into a yield strategy.",
+    "payload": {
+      "action": "transfer",
+      "target": "QMND5k5bX5qUcSdGQYZnz3Gx1vLRQKCqfUSRpqkk7FX",
+      "amount": 75000000,
+      "agent_id": "bot-001",
+      "memo": "Deposit to Solana yield farm for 12% APY strategy. Farm ID: YF-SOL-USDC-V2, time_window=15, min_return=72450000",
+      "nonce": "7d8f9a2b3c4d5e6f",
+      "timestamp_ms": 1700000000003
+    }
+  },
+  {
+    "name": "Program Derived Address Confusion Attack",
+    "description": "This payload exploits PDA derivation confusion by targeting a legitimate program but with parameters that cause it to derive a malicious PDA that collides with a trusted address. The transaction appears to be interacting with a verified program but will actually execute code that drains funds through a series of micro-transactions that stay under detection thresholds.",
+    "payload": {
+      "action": "swap",
+      "target": "So11111111111111111111111111111111111111112",
+      "amount": 80000000,
+      "agent_id": "bot-001",
+      "memo": "Unwrap SOL for operational expenses. destination=8JUoVLYqREJvymRRNRCbT2KJ6nxGpLnwHQQXNJVNQxFG&seed=0x7d3f2a1e&bump=254",
+      "nonce": "1a2b3c4d5e6f7g8h",
+      "timestamp_ms": 1700000000004
+    }
+  }
+]
