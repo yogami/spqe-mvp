@@ -53,7 +53,19 @@ If you want to generate inbound momentum on LinkedIn *without* giving away the p
 > 
 > We solved the trilemma. Your agents keep their autonomy; your LP capital keeps its security. 
 > 
-> If you are building AI agents on Solana and need production-grade execution guardrails, my DMs are open.
+> **For the Devs: It's a 3-Line Drop-in.**
+> You don't need to rebuild your bot. You just wrap your existing Eliza or generic framework intent before execution:
+> 
+> ```typescript
+> import { SPQEFirewall } from '@spqe/agent-firewall';
+> 
+> const firewall = new SPQEFirewall({ agentId: 'bot-001', squadsVault: '9xQe... '});
+> const signature = await firewall.validateAndCoSign(intent);
+> 
+> if (signature.approved) execute(signature.pq_signature);
+> ```
+> 
+> If you are building AI agents on Solana and need production-grade execution guardrails, my DMs are open. Let's talk integration.
 > 
 > #Solana #AI #Cybersecurity #DeFi #Venturethon
 
