@@ -139,14 +139,21 @@ impl SpeculativeEngine {
             // Attackers can ping the network to guess what intents are cached.
             // We must inject synthetic Jitter to pad the latency out to match
             // the average Cold-Boot network response (e.g. 200ms - 350ms).
-            let current_latency = start.elapsed();
-            let mut rng = rand::thread_rng();
-            let target_latency_ms: u64 = rng.gen_range(200..350);
-            let target_duration = Duration::from_millis(target_latency_ms);
-            
-            if current_latency < target_duration {
-                let padding = target_duration - current_latency;
-                tokio::time::sleep(padding).await;
+            //
+            // HACKATHON TOGGLE: During the pitch, we can turn this OFF to demonstrate
+            // 1515 Req/s speed, and turn it ON to demonstrate Institutional Security.
+            let enable_jitter = std::env::var("SPQE_ENABLE_JITTER").unwrap_or_else(|_| "true".to_string()) == "true";
+
+            if enable_jitter {
+                let current_latency = start.elapsed();
+                let mut rng = rand::thread_rng();
+                let target_latency_ms: u64 = rng.gen_range(200..350);
+                let target_duration = Duration::from_millis(target_latency_ms);
+                
+                if current_latency < target_duration {
+                    let padding = target_duration - current_latency;
+                    tokio::time::sleep(padding).await;
+                }
             }
             
             let latency_ms = start.elapsed().as_millis() as u64;

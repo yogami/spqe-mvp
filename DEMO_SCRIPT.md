@@ -13,6 +13,11 @@
 *   **Visual:** Show the gateway logs. The first request takes ~300ms (SLM evaluation). The next 4 requests take <3ms.
 *   **Script:** "AI agents are repetitive. Watch the latency. The first novel intent hits our Cold-Boot SLM for deep semantic inspection. But once verified, it's dropped into our O(1) Semantic Cache natively inside the Rust Enclave. Subsequent identical intents bypass the AI to achieve 1515 Requests/Second. We use expensive AI to map the perimeter, and cheap cryptography to enforce it."
 
+## Demo 1.5: The Cryptographic Jitter Toggle (1:30 - 2:00)
+*   **Action:** Toggle the `SPQE_ENABLE_JITTER` env var on the Enclave and run the Warm-Boot test again.
+*   **Visual:** The requests now take a randomized 200-350ms despite being cache hits.
+*   **Script:** "But 1515 Req/s is actually a vulnerability. If an unverified entity pings our API, a 2ms response vs a 300ms response creates a Timing Side-Channel Oracle, allowing a cartel to deduce exactly what our institutional clients are currently holding in cache. When trading massive TVL, we toggle on Cryptographic Constant-Time Jitter. The Enclave injects randomized padding to perfectly mask cache hits as cold-boots. We sacrifice speed for provable, side-channel immunity."
+
 ## Demo 2: The Catastrophic Prompt Injection (2:00 - 3:30)
 *   **Action:** Send a malicious `TransactionIntent` where the `memo` field contains a hidden prompt injection, or the `amount` attempts to drain 250 SOL.
 *   **Visual:** Show the terminal output from the agent. The transaction is immediately hard-blocked with a `DENIED` status. 

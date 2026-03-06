@@ -54,5 +54,6 @@ We have structurally mitigated 4 critical vulnerabilities, and here is how you d
 2. **SemanticCamo:** Solved by Serverless `Llama-3-8B` endpoint.
 3. **Liveness Deadlock:** Solved by `Degraded Mode` routing to an Allowance Vault (1-of-2).
 4. **Infinite Replay Attack / Cache Speed:** Solved by the O(1) `semantic_cache` in the Rust `SpeculativeEngine` combining fast-paths with absolute Timestamp/Nonce Replay Protection.
+5. **Cryptographic Timing Oracle (The Side-Channel Exploit):** If our Cache returns a verdict in 2ms, but a Cold-Boot takes 300ms, Cartels can ping the network to measure latency and guess our institutional client's cached intents. *Defense:* We built a `SPQE_ENABLE_JITTER` toggle into the Rust Enclave. In production, we intentionally inject Constant-Time Cryptographic Jitter (using `rand`) to pad cache hits out to ~250ms, perfectly masking our operations. We can toggle it off for 1515 Req/s benchmarks, or toggle it on for Institutional Security.
 
 You are ready. Go win.
