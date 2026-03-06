@@ -33,7 +33,7 @@ pub struct SpeculativeEngine {
     signer: Arc<dyn SignerPort>,
     local_policy: Arc<PolicyEngine>,
     evaluation_timeout: Duration,
-    semantic_cache: Arc<std::sync::Mutex<HashMap<String, PolicyVerdict>>>,
+    semantic_cache: Arc<std::sync::Mutex<HashMap<String, (PolicyVerdict, u64)>>>,
 }
 
 impl SpeculativeEngine {
@@ -90,8 +90,16 @@ impl SpeculativeEngine {
         let semantic_hash = hasher.finish().to_string();
 
         let mut cached_verdict_opt = None;
-        if let Ok(cache) = self.semantic_cache.lock() {
-            if let Some(v) = cache.get(&semantic_hash) {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        if let Ok(mut cache) = self.semantic_cache.lock() {
+            // TOCTOU Prevention: Strict 5-second TTL on semantic cache
+            cache.retain(|_, (_, timestamp)| now_ms.saturating_sub(*timestamp) <= 5_000);
+
+            if let Some((v, _)) = cache.get(&semantic_hash) {
                 cached_verdict_opt = Some(v.clone());
             }
         }
@@ -146,9 +154,13 @@ impl SpeculativeEngine {
         // Unwrap JoinHandle results
         let verdict = match eval_result {
             Ok(Ok(Ok(verdict))) => {
-                // Cache the successful SLM evaluation
+                // Cache the successful SLM evaluation with a TOCTOU-resistant timestamp
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
                 if let Ok(mut cache) = self.semantic_cache.lock() {
-                    cache.insert(semantic_hash, verdict.clone());
+                    cache.insert(semantic_hash, (verdict.clone(), now_ms));
                 }
                 verdict
             },

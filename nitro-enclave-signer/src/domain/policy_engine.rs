@@ -54,7 +54,7 @@ impl PolicyEngine {
         let now_ms = now * 1000;
 
         // 0. Anti-Replay: Timestamp and Nonce validation
-        let max_age_ms = 60_000; // 60 seconds
+        let max_age_ms = 5_000; // 5 seconds (Strict HFT constraint)
         if now_ms.saturating_sub(intent.timestamp_ms) > max_age_ms {
             return Err(PolicyVerdict {
                 approved: false,
