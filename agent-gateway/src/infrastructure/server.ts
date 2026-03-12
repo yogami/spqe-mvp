@@ -9,9 +9,10 @@
 //   GET  /api/health    — health check
 //   GET  /api/docs      — Swagger UI (via @fastify/swagger-ui)
 
-import Fastify from "fastify";
+import Fastify, { FastifyRequest, FastifyReply } from "fastify";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
+import cors from "@fastify/cors";
 import "dotenv/config";
 
 import type { TransactionIntent, ValidateResponse } from "../domain/intent.js";
@@ -24,13 +25,13 @@ const ENCLAVE_TIMEOUT_MS = parseInt(process.env.ENCLAVE_TIMEOUT_MS ?? "25000", 1
 
 async function buildServer() {
     const app = Fastify({
-        logger: {
-            level: process.env.LOG_LEVEL ?? "info",
-            transport:
-                process.env.NODE_ENV !== "production"
-                    ? { target: "pino-pretty" }
-                    : undefined,
-        },
+        logger: true,
+    });
+
+    // === CORS ===
+    await app.register(cors, {
+        origin: "*", // Allow all origins for the public demo
+        methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE"]
     });
 
     // === Swagger/OpenAPI ===
@@ -60,6 +61,14 @@ async function buildServer() {
     const useCase = new ValidateAndSignUseCase(enclaveClient);
 
     // === Routes ===
+
+    // Manual CORS Preflight Override
+    app.options("/api/validate", async (request, reply) => {
+        reply.header("Access-Control-Allow-Origin", "*");
+        reply.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+        reply.header("Access-Control-Allow-Headers", "Content-Type");
+        return reply.status(200).send();
+    });
 
     // POST /api/validate — Main endpoint
     app.post<{ Body: TransactionIntent; Reply: ValidateResponse }>(
@@ -128,7 +137,8 @@ async function buildServer() {
                 },
             },
         },
-        async (request, reply) => {
+        async (request: FastifyRequest<{ Body: TransactionIntent }>, reply: FastifyReply) => {
+            reply.header("Access-Control-Allow-Origin", "*");
             const intent = request.body;
             const result = await useCase.execute(intent);
             return reply.send(result);
