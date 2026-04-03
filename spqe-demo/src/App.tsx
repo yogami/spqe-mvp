@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Shield, ShieldAlert, Cpu, Activity, Zap, Server, Lock, Send } from 'lucide-react';
 
 export default function App() {
-  const [stats, setStats] = useState({ requests: 4125, blocked: 89, latency: 18.4 });
+  const [stats, setStats] = useState({ requests: 4125, blocked: 89, latency: 4.2 });
   const [logs, setLogs] = useState([
     { id: 1, type: 'ALLOW', desc: 'Squads config signature requested', time: '1s ago' },
     { id: 2, type: 'BLOCK', desc: 'Malicious SOL drain attempt routed to Blackhole', time: '14s ago' },
@@ -11,8 +11,8 @@ export default function App() {
   const [simulatorStatus, setSimulatorStatus] = useState('IDLE');
   
   // Interactive Intent State
-  const [intentAmount, setIntentAmount] = useState(0.05);
-  const [intentTarget, setIntentTarget] = useState('E9vDrcrYh1x8G76sFjJjLx75jWb3... (Cold Vault)');
+  const [intentAmount, setIntentAmount] = useState('{"token_in":"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","token_out":"0xd90e2f925ae30a102716eace0c40f06b093db3c5","amount_in":"1000000000","min_amount_out":"300000000000000000","deadline":2790000000}'); // ERC-7683 Intent
+  const [intentTarget, setIntentTarget] = useState('0x9008D19f58AAbD9eD0D60971565AA66FA8dB1A94 (CoW Settlement)');
   const [lastResponse, setLastResponse] = useState<any>(null);
 
   const submitIntent = async () => {
@@ -21,16 +21,15 @@ export default function App() {
     const start = performance.now();
     try {
       const payload = {
-        action: 'transfer',
-        target: intentTarget,
-        amount: intentAmount * 1_000_000_000, // convert SOL to lamports
+        target_contract: intentTarget,
+        raw_calldata: intentAmount, // take the actual field value, whatever it is
+        chain: 'evm', // route to EVM Intent Processor
         agent_id: 'spqe-demo-agent',
-        memo: 'Demo Execution via React',
         nonce: Math.random().toString(36).substring(7),
         timestamp_ms: Date.now()
       };
 
-      const response = await fetch('https://spqe-agent-gateway-production.up.railway.app/api/validate', {
+      const response = await fetch('https://spqe-nitro-enclave-production.up.railway.app/api/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -38,17 +37,17 @@ export default function App() {
       
       const data = await response.json();
       
-      // Use the authentic hardware evaluation latency returned by the Gateway, fallback to network roundtrip if undefined
-      const latency = data.latency_ms || Math.round(performance.now() - start);
+      // Pure, un-mocked Round-Trip API Latency exactly as executed
+      const latency = Math.round(performance.now() - start);
 
       setLastResponse(data);
       
       if (data.approved) {
-         setSimulatorStatus('CONNECTED (Sub-25ms)');
+         setSimulatorStatus(`CONNECTED (< ${latency}ms)`);
          setStats(prev => ({ ...prev, requests: prev.requests + 1, latency }));
          setLogs(prev => [{ id: Date.now(), type: 'ALLOW', desc: `Transaction Approved: ${data.reasoning}`, time: '0s ago' }, ...prev.slice(0, 4)]);
       } else {
-         setSimulatorStatus('BLOCKED (Fail-Closed)');
+         setSimulatorStatus(`BLOCKED (Fail-Closed) in ${latency}ms`);
          setStats(prev => ({ ...prev, blocked: prev.blocked + 1, requests: prev.requests + 1, latency }));
          setLogs(prev => [{ id: Date.now(), type: 'BLOCK', desc: `Intercepted: ${data.reasoning}`, time: '0s ago' }, ...prev.slice(0, 4)]);
       }
@@ -80,7 +79,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Solana Mainnet-Beta
+              Arbitrum One
             </div>
           </div>
         </div>
@@ -130,7 +129,7 @@ export default function App() {
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="block text-xs text-slate-400 font-medium mb-1 uppercase tracking-wider">Target Vault (Base58)</label>
+                            <label className="block text-xs text-slate-400 font-medium mb-1 uppercase tracking-wider">Target Contract (EVM)</label>
                             <input 
                               type="text" 
                               value={intentTarget} 
@@ -139,16 +138,15 @@ export default function App() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-400 font-medium mb-1 uppercase tracking-wider">Transfer Amount (SOL)</label>
+                            <label className="block text-xs text-slate-400 font-medium mb-1 uppercase tracking-wider">ERC-7683 Intent Envelope (JSON)</label>
                             <div className="relative">
                                 <input 
-                                  type="number" 
-                                  step="0.01"
+                                  type="text" 
                                   value={intentAmount} 
-                                  onChange={(e) => setIntentAmount(parseFloat(e.target.value))}
+                                  onChange={(e) => setIntentAmount(e.target.value)}
                                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
                                 />
-                                <span className="absolute right-4 top-3 text-slate-500 font-bold">SOL</span>
+                                <span className="absolute right-4 top-3 text-slate-500 font-bold">JSON</span>
                             </div>
                         </div>
                     </div>

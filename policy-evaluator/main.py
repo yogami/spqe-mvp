@@ -15,6 +15,7 @@
 import os
 import time
 import logging
+import httpx
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -46,6 +47,22 @@ class EvaluationResponse(BaseModel):
     risk_score: float = Field(..., description="Risk score 0.0 to 1.0")
     evaluation_ms: int = Field(..., description="Evaluation latency in ms")
     evaluator: str = Field(..., description="Which evaluator produced the verdict")
+
+async def get_pyth_price() -> float:
+    # Pyth SOL/USD feed ID
+    sol_feed_id = "ef0d8b6fda2ceba41da15d4095d1da392a0d3f8ed0c9c7ddce4812328fb8ff78"
+    url = f"https://hermes.pyth.network/v2/updates/price/latest?ids[]={sol_feed_id}"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=2.0)
+            data = resp.json()
+            price_data = data["parsed"][0]["price"]
+            price_str = price_data["price"]
+            expo = price_data["expo"]
+            return float(price_str) * (10 ** expo)
+    except Exception as e:
+        logger.error(f"Pyth fetch failed: {e}")
+        return 150.0  # Fallback dummy price
 
 
 # === Application Setup ===
@@ -88,6 +105,24 @@ async def evaluate_intent(intent: TransactionIntent):
         amount=intent.amount,
         agent_id=intent.agent_id,
     )
+
+    # Slippage / Toxic Liquidity Oracle Check
+    sol_price = await get_pyth_price()
+    # Assume amount is in lamports (1e9). Calculate approximate USD value being moved
+    amount_sol = intent.amount / 1_000_000_000
+    usd_value = amount_sol * sol_price
+    
+    # Policy: Prevent moving more than $50,000 USD at market price in a single autonomous tx
+    # (Protects against flash crashes / sandwich attacks / massive prompt injection drain)
+    if usd_value > 50000.0:
+        elapsed_ms = int((time.time() - start) * 1000)
+        return EvaluationResponse(
+            approved=False,
+            reasoning=f"Pyth Oracle Block: Transaction usd_value (${usd_value:.2f}) exceeds autonomous maximum of $50,000. Slippage risk high.",
+            risk_score=1.0,
+            evaluation_ms=elapsed_ms,
+            evaluator="pyth_oracle_firewall",
+        )
 
     # If rules deny, fast-path: don't consult the SLM
     if not rule_verdict.approved:
